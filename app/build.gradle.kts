@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.antigravityeq"
         minSdk = 26
         targetSdk = 35
-        versionCode = 185
-        versionName = "1.8.5"
+        versionCode = 200
+        versionName = "2.0.0-beta1"
     }
 
     signingConfigs {
@@ -94,4 +94,8 @@ dependencies {
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+  // Shizuku (Non-root elevated system audio interception)
+  implementation(libs.shizuku.api)
+  implementation(libs.shizuku.provider)
 }

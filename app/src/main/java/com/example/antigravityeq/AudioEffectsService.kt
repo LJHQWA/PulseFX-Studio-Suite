@@ -629,6 +629,37 @@ class AudioEffectsService : Service() {
                             }
                         }
 
+                        // Module 20: Dynamic Multi-Band Transient Shaper (Punch vs. Sustain Envelope Stage)
+                        var transientStageDb = 0f
+                        if (currentSettings.isTransientShaperEnabled) {
+                            val attackNorm = (currentSettings.transientAttack / 100f).coerceIn(-1.0f, 1.0f)
+                            val sustainNorm = (currentSettings.transientSustain / 100f).coerceIn(-1.0f, 1.0f)
+                            val speedMult = when (currentSettings.transientSpeed) {
+                                0 -> 1.35f // Fast (Cymbals & Micro-transients)
+                                1 -> 1.00f // Balanced (Snares & Kicks)
+                                else -> 0.75f // Heavy (Sub-bass & Floor Toms)
+                            }
+                            
+                            // Accentuate or soften transient strike vs room acoustic body
+                            when (i) {
+                                0, 1 -> { // Sub-bass punch vs body
+                                    transientStageDb += (attackNorm * 4.5f * speedMult) + (sustainNorm * 2.5f)
+                                }
+                                3 -> { // 250Hz Snare body & transient crack
+                                    transientStageDb += (attackNorm * 5.5f * speedMult) + (sustainNorm * 3.0f)
+                                }
+                                5, 6 -> { // 1kHz-2kHz Guitar pick transient & vocal consonant attack
+                                    transientStageDb += (attackNorm * 4.0f * speedMult)
+                                }
+                                7, 8 -> { // 4kHz-8kHz Stick definition & rimshot crack
+                                    transientStageDb += (attackNorm * 6.0f * speedMult) + (sustainNorm * 2.0f)
+                                }
+                                9 -> { // 16kHz Cymbal splash & transient sparkle
+                                    transientStageDb += (attackNorm * 5.0f * speedMult) + (sustainNorm * 3.5f)
+                                }
+                            }
+                        }
+
                         // 8. Reverberation Acoustic Space Stage (Massive Studio Hall / Cathedral Echo Reflections)
                         var reverbStageDb = 0f
                         if (currentSettings.isReverbEnabled) {
@@ -764,6 +795,7 @@ class AudioEffectsService : Service() {
                             (diffSurroundStageDb * eqAlpha * (if (i >= 5) clarityAlpha else 1.0f)) +
                             (vheStageDb * eqAlpha * (if (i >= 5) clarityAlpha else 1.0f)) +
                             (spatialAudioStageDb * eqAlpha * (if (i >= 5) clarityAlpha else 1.0f)) +
+                            (transientStageDb * eqAlpha) +
                             (reverbStageDb * eqAlpha) +
                             (ddcStageDb * ((1.0f + eqAlpha) * 0.5f)) +
                             fetStageDb +
@@ -838,7 +870,8 @@ class AudioEffectsService : Service() {
                         currentSettings.isAuditoryProtectionEnabled ||
                         currentSettings.isSpeakerOptEnabled ||
                         currentSettings.isFetCompressorEnabled ||
-                        currentSettings.isSpatialAudioEnabled
+                        currentSettings.isSpatialAudioEnabled ||
+                        currentSettings.isTransientShaperEnabled
 
                     if (isAnyDspModuleActive) {
                         if (!eq.enabled) eq.enabled = true
@@ -1061,7 +1094,8 @@ class AudioEffectsService : Service() {
             ((if (currentSettings.isSpeakerOptEnabled) 1 else 0) shl 15) or
             ((if (currentSettings.isPlaybackAgcEnabled) 1 else 0) shl 16) or
             ((if (currentSettings.isFetCompressorEnabled) 1 else 0) shl 17) or
-            ((if (currentSettings.isSpatialAudioEnabled) 1 else 0) shl 18)
+            ((if (currentSettings.isSpatialAudioEnabled) 1 else 0) shl 18) or
+            ((if (currentSettings.isTransientShaperEnabled) 1 else 0) shl 19)
 
         // Only play confirmation chime when an effect SWITCH is physically turned ON, NEVER on slider dragging
         if (anyEffectEngaged && currentSettings.isEnabled && (!lastEngagedState || currentModulesHash != lastEnabledModulesHash)) {
@@ -1074,33 +1108,56 @@ class AudioEffectsService : Service() {
     private fun scanActiveSessions() {
         Thread {
             try {
-                val process = Runtime.getRuntime().exec("dumpsys media.audio_flinger")
-                val reader = process.inputStream.bufferedReader()
                 val sessionIds = mutableSetOf<Int>()
-                
-                val sessionIdRegex = Regex("(?i)session(?:\\s+id)?:?\\s+(\\d+)")
-                val sessionsRegex = Regex("(?i)sessions:\\s*([\\d\\s]+)")
-                val trackRegex = Regex("(?i)session\\s+(\\d+)")
 
-                reader.forEachLine { line ->
-                    sessionIdRegex.findAll(line).forEach { match ->
-                        match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
-                    }
-                    
-                    sessionsRegex.find(line)?.let { match ->
-                        val sessionsList = match.groups[1]?.value ?: ""
-                        sessionsList.split("\\s+".toRegex()).forEach { token ->
-                            token.toIntOrNull()?.let { sessionIds.add(it) }
+                // 1. If Shizuku elevated access is active, read sessions with full system privileges
+                if (com.example.antigravityeq.shizuku.ShizukuAudioCommander.hasPermission.value) {
+                    val shizukuOutput = com.example.antigravityeq.shizuku.ShizukuAudioCommander.execElevated("dumpsys media.audio_flinger")
+                    val sessionIdRegex = Regex("(?i)session(?:\\s+id)?:?\\s+(\\d+)")
+                    val sessionsRegex = Regex("(?i)sessions:\\s*([\\d\\s]+)")
+                    val trackRegex = Regex("(?i)session\\s+(\\d+)")
+
+                    shizukuOutput.lineSequence().forEach { line ->
+                        sessionIdRegex.findAll(line).forEach { match ->
+                            match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
+                        }
+                        sessionsRegex.find(line)?.let { match ->
+                            val sessionsList = match.groups[1]?.value ?: ""
+                            sessionsList.split("\\s+".toRegex()).forEach { token ->
+                                token.toIntOrNull()?.let { sessionIds.add(it) }
+                            }
+                        }
+                        trackRegex.findAll(line).forEach { match ->
+                            match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
                         }
                     }
-
-                    trackRegex.findAll(line).forEach { match ->
-                        match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
-                    }
                 }
-                
-                reader.close()
-                process.destroy()
+
+                // 2. Standard shell fallback for non-Shizuku sessions
+                if (sessionIds.isEmpty()) {
+                    val process = Runtime.getRuntime().exec("dumpsys media.audio_flinger")
+                    val reader = process.inputStream.bufferedReader()
+                    val sessionIdRegex = Regex("(?i)session(?:\\s+id)?:?\\s+(\\d+)")
+                    val sessionsRegex = Regex("(?i)sessions:\\s*([\\d\\s]+)")
+                    val trackRegex = Regex("(?i)session\\s+(\\d+)")
+
+                    reader.forEachLine { line ->
+                        sessionIdRegex.findAll(line).forEach { match ->
+                            match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
+                        }
+                        sessionsRegex.find(line)?.let { match ->
+                            val sessionsList = match.groups[1]?.value ?: ""
+                            sessionsList.split("\\s+".toRegex()).forEach { token ->
+                                token.toIntOrNull()?.let { sessionIds.add(it) }
+                            }
+                        }
+                        trackRegex.findAll(line).forEach { match ->
+                            match.groups[1]?.value?.toIntOrNull()?.let { sessionIds.add(it) }
+                        }
+                    }
+                    reader.close()
+                    process.destroy()
+                }
 
                 for (sessionId in sessionIds) {
                     if (sessionId > 0 && !activeSessions.containsKey(sessionId)) {

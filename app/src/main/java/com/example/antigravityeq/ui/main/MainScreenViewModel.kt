@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.example.antigravityeq.shizuku.ShizukuAudioCommander
+import com.example.antigravityeq.data.PresetManager
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
@@ -24,7 +26,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val _liveFftLevels = MutableStateFlow(FloatArray(10) { 0f })
     val liveFftLevels: StateFlow<FloatArray> = _liveFftLevels.asStateFlow()
 
+    val isShizukuAvailable: StateFlow<Boolean> = ShizukuAudioCommander.isShizukuAvailable
+    val hasShizukuPermission: StateFlow<Boolean> = ShizukuAudioCommander.hasPermission
+
     init {
+        ShizukuAudioCommander.init()
         // Simulated 60 FPS live spectrum animation in UI (requires zero microphone permissions)
         viewModelScope.launch(Dispatchers.Default) {
             var timeOffset = 0f
@@ -251,10 +257,35 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         it.copy(isSpeakerOptEnabled = enabled)
     }
 
-    // 19. Factory Reset
+    // 19. Module 20: Dynamic Transient Shaper (Punch & Attack)
+    fun setTransientShaper(
+        enabled: Boolean,
+        attack: Int = _uiState.value.transientAttack,
+        sustain: Int = _uiState.value.transientSustain,
+        speed: Int = _uiState.value.transientSpeed
+    ) = updateSettings {
+        it.copy(
+            isTransientShaperEnabled = enabled,
+            transientAttack = attack,
+            transientSustain = sustain,
+            transientSpeed = speed
+        )
+    }
+
+    // 20. Curated Studio Presets
+    fun applyPreset(preset: PresetManager.StudioPreset) {
+        updateSettings { preset.apply(it) }
+    }
+
+    // 21. Elevated Shizuku Controls
+    fun requestShizukuPermission() {
+        ShizukuAudioCommander.requestPermission()
+    }
+
+    // 22. Factory Reset
     fun resetToDefaults() = updateSettings { EqualizerSettings() }
 
-    // 20. Refresh & Rescan Audio Sessions
+    // 23. Refresh & Rescan Audio Sessions
     fun refreshSession() {
         _uiState.value = EqualizerSettings.load(context)
         try {

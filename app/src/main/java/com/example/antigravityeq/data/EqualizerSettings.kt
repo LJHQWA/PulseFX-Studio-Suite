@@ -103,7 +103,13 @@ data class EqualizerSettings(
     val spatialAudioMode: Int = 0, // 0 = 360° Holographic Sphere, 1 = Dolby Atmos Cinema Stage, 2 = Concert Hall Immersion
     val spatialAudioAngle: Int = 180, // 30° to 180° Virtual Speaker Separation Angle (Defaulted to 180° for full stage wrap)
     val spatialDirection: Int = 1, // 0 = Orbiting Holographic Multi-Angle, 1 = Front Center 180° Panorama (Anchored Vocals + Wide Wings), 2 = Side & Rear Binaural Hemispheres, 3 = Overhead 3D Elevation
-    val instrumentSeparation: Int = 85 // 0 to 100% (Frequency-Domain Instrument Spatial Displacement & Phase Unmasking)
+    val instrumentSeparation: Int = 85, // 0 to 100% (Frequency-Domain Instrument Spatial Displacement & Phase Unmasking)
+
+    // Module 20: Dynamic Multi-Band Transient Shaper (Explosive Punch & Attack Recovery)
+    val isTransientShaperEnabled: Boolean = false,
+    val transientAttack: Int = 35, // -100 to +100 (-12dB to +12dB punch acceleration)
+    val transientSustain: Int = 0, // -100 to +100 (-12dB to +12dB room decay & body)
+    val transientSpeed: Int = 1 // 0 = Fast (Highs/Cymbals), 1 = Balanced (Snares/Kicks), 2 = Heavy (Bass/Toms)
 ) {
     companion object {
         private const val PREFS_NAME = "antigravity_viper_v4a_prefs"
@@ -275,6 +281,11 @@ data class EqualizerSettings(
             val spatialDirection = prefs.getInt("v4a_spatial_direction", 1)
             val instrumentSeparation = prefs.getInt("v4a_spatial_instrument_sep", 85)
 
+            val isTransientShaperEnabled = prefs.getBoolean("v4a_transient_enabled", false)
+            val transientAttack = prefs.getInt("v4a_transient_attack", 35)
+            val transientSustain = prefs.getInt("v4a_transient_sustain", 0)
+            val transientSpeed = prefs.getInt("v4a_transient_speed", 1)
+
             return EqualizerSettings(
                 selectedTab = selectedTab,
                 isEnabled = isEnabled,
@@ -336,7 +347,11 @@ data class EqualizerSettings(
                 spatialAudioMode = spatialAudioMode,
                 spatialAudioAngle = spatialAudioAngle,
                 spatialDirection = spatialDirection,
-                instrumentSeparation = instrumentSeparation
+                instrumentSeparation = instrumentSeparation,
+                isTransientShaperEnabled = isTransientShaperEnabled,
+                transientAttack = transientAttack,
+                transientSustain = transientSustain,
+                transientSpeed = transientSpeed
             )
         }
 
@@ -414,6 +429,11 @@ data class EqualizerSettings(
             putInt("v4a_spatial_angle", spatialAudioAngle)
             putInt("v4a_spatial_direction", spatialDirection)
             putInt("v4a_spatial_instrument_sep", instrumentSeparation)
+
+            putBoolean("v4a_transient_enabled", isTransientShaperEnabled)
+            putInt("v4a_transient_attack", transientAttack)
+            putInt("v4a_transient_sustain", transientSustain)
+            putInt("v4a_transient_speed", transientSpeed)
             apply()
         }
     }

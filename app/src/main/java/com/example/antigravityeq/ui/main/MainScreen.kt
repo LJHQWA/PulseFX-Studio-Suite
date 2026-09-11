@@ -23,11 +23,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.antigravityeq.MainActivity
 import com.example.antigravityeq.data.EqualizerSettings
+import com.example.antigravityeq.data.PresetManager
 import com.example.antigravityeq.ui.component.EffectCard
 import com.example.antigravityeq.ui.component.InteractiveBassCurveGraph
 import com.example.antigravityeq.ui.component.InteractiveClarityCurveGraph
 import com.example.antigravityeq.ui.component.InteractiveCompressorGraph
 import com.example.antigravityeq.ui.component.InteractiveFirequalizerCurve
+import com.example.antigravityeq.ui.component.SpatialRadarCanvas
 import com.example.antigravityeq.ui.component.ValuePicker
 import com.example.antigravityeq.ui.component.ValueSlider
 
@@ -38,7 +40,11 @@ fun MainScreen(
     viewModel: MainScreenViewModel = viewModel()
 ) {
     val settings by viewModel.uiState.collectAsStateWithLifecycle()
-    var showAboutDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val isShizukuAvailable by viewModel.isShizukuAvailable.collectAsStateWithLifecycle()
+    val hasShizukuPermission by viewModel.hasShizukuPermission.collectAsStateWithLifecycle()
+
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showPresetsDialog by remember { mutableStateOf(false) }
 
     if (showAboutDialog) {
         AlertDialog(
@@ -141,6 +147,95 @@ fun MainScreen(
         )
     }
 
+    if (showPresetsDialog) {
+        AlertDialog(
+            onDismissRequest = { showPresetsDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "🎛️", fontSize = 20.sp)
+                    Text(
+                        text = "Curated Studio Signatures",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Instantly configure the 20 sovereign DSP modules to match reference studio hardware profiles.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    PresetManager.PRESETS.forEach { preset ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                            onClick = {
+                                viewModel.applyPreset(preset)
+                                showPresetsDialog = false
+                            }
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = preset.name,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = preset.badge,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = preset.subtitle,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = preset.description,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPresetsDialog = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+    }
+
     val liveFftLevels by viewModel.liveFftLevels.collectAsStateWithLifecycle()
     var selectedDomainTab by remember { mutableStateOf(0) }
 
@@ -152,12 +247,29 @@ fun MainScreen(
                 title = {
                     Column {
                         Text("PulseFX Studio", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("v1.8.5 • 4-Domain Acoustic Suite", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        Text("v2.0-beta1 • Sovereign DSP Suite", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     }
                 },
                 actions = {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     var isRefreshing by remember { mutableStateOf(false) }
+
+                    // Presets Button
+                    IconButton(onClick = { showPresetsDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "🎛️",
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     IconButton(
                         onClick = {
@@ -182,12 +294,12 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape),
+                                .background(MaterialTheme.colorScheme.surfaceVariant, androidx.compose.foundation.shape.CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "↻",
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
@@ -400,6 +512,40 @@ fun MainScreen(
                             )
                         }
                     }
+
+                    // Shizuku Elevated Hook Status Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (hasShizukuPermission) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = if (hasShizukuPermission) "🟢 Elevated: AudioFlinger Intercept Active"
+                                       else if (isShizukuAvailable) "🟡 Shizuku Ready (Rootless Interception)"
+                                       else "⚪ Standard Audio Session Hook",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (hasShizukuPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isShizukuAvailable && !hasShizukuPermission) {
+                            TextButton(
+                                onClick = { viewModel.requestShizukuPermission() },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(24.dp)
+                            ) {
+                                Text("Grant", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -546,6 +692,40 @@ fun MainScreen(
                     )
                 }
 
+                // 6. Dynamic Transient Shaper (Punch & Attack Precision)
+                EffectCard(
+                    badgeText = "DTS",
+                    name = "Dynamic transient shaper (Punch & Attack)",
+                    enabled = settings.isTransientShaperEnabled,
+                    onEnabledChange = { viewModel.updateSettings { s -> s.copy(isTransientShaperEnabled = it) } }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ValuePicker(
+                            title = "Detection Speed",
+                            values = arrayOf("Fast (Drums / Transients)", "Medium (Guitar / Piano)", "Slow (Bass / Brass)"),
+                            selectedIndex = settings.transientSpeed,
+                            onSelectedIndexChange = { idx -> viewModel.updateSettings { s -> s.copy(transientSpeed = idx) } }
+                        )
+                        ValueSlider(
+                            title = "Attack punch boost",
+                            summary = if (settings.transientAttack >= 0) "+${settings.transientAttack}%" else "${settings.transientAttack}%",
+                            value = settings.transientAttack,
+                            onValueChange = { v -> viewModel.updateSettings { s -> s.copy(transientAttack = v) } },
+                            valueRange = -50..50
+                        )
+                        ValueSlider(
+                            title = "Sustain body length",
+                            summary = if (settings.transientSustain >= 0) "+${settings.transientSustain}%" else "${settings.transientSustain}%",
+                            value = settings.transientSustain,
+                            onValueChange = { v -> viewModel.updateSettings { s -> s.copy(transientSustain = v) } },
+                            valueRange = -50..50
+                        )
+                    }
+                }
+
                 // ========================================================
                 // 🏠 SECTION 2: ROOM AMBIENCE & SPATIAL ACOUSTICS
                 // ========================================================
@@ -558,7 +738,7 @@ fun MainScreen(
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                 )
 
-                // 6. Schroeder-Moorer Reverberation
+                // 7. Schroeder-Moorer Reverberation
                 EffectCard(
                     badgeText = "REV",
                     name = "Schroeder-Moorer reverberation",
@@ -593,7 +773,7 @@ fun MainScreen(
                     }
                 }
 
-                // 7. Field Surround
+                // 8. Field Surround
                 EffectCard(
                     badgeText = "FS",
                     name = "Field surround (Mid/Side Matrix)",
@@ -621,7 +801,7 @@ fun MainScreen(
                     }
                 }
 
-                // 8. Differential Surround (Haas)
+                // 9. Differential Surround (Haas)
                 EffectCard(
                     badgeText = "DS",
                     name = "Differential surround (Haas ITD Delay)",
@@ -637,7 +817,7 @@ fun MainScreen(
                     )
                 }
 
-                // 9. Headphone Surround+
+                // 10. Headphone Surround+
                 EffectCard(
                     badgeText = "VHE",
                     name = "Headphone surround+ (Binaural Crossfeed)",
@@ -653,7 +833,7 @@ fun MainScreen(
                     )
                 }
 
-                // 10. 3D Spatial Audio Matrix (Cinema, Concert Hall & 360° Sphere Immersion)
+                // 11. 3D Spatial Audio Matrix (Cinema, Concert Hall & 360° Sphere Immersion)
                 EffectCard(
                     badgeText = "3D",
                     name = "3D spatial audio matrix (Sphere / Atmos / Stage)",
@@ -689,6 +869,24 @@ fun MainScreen(
                                 viewModel.updateSettings { s -> s.copy(spatialDirection = idx) }
                             }
                         )
+
+                        // 3D Spatial Radar Orbital Canvas
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Interactive 3D Soundstage Radar",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 2.dp)
+                        )
+                        SpatialRadarCanvas(
+                            angle = settings.spatialAudioAngle,
+                            separation = settings.instrumentSeparation,
+                            direction = settings.spatialDirection,
+                            onAngleChange = { a -> viewModel.updateSettings { s -> s.copy(spatialAudioAngle = a) } },
+                            onSeparationChange = { sep -> viewModel.updateSettings { s -> s.copy(instrumentSeparation = sep) } }
+                        )
+
                         ValueSlider(
                             title = "Virtual speaker separation angle",
                             summary = "${settings.spatialAudioAngle}°",
